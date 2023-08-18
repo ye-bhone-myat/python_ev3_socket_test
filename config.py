@@ -1,0 +1,3 @@
+PORT = 6969
+FORMAT = "utf-8"
+MAX_CONNECTIONS = 1
