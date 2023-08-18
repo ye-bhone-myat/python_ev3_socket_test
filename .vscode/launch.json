@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Server",
+            "type": "python",
+            "request": "launch",
+            "module": "ev3Server",
+            "justMyCode": true
+        },
+        {
+            "name": "Download and Run client.py",
+            "type": "ev3devBrowser",
+            "request": "launch",
+            "program": "/home/robot/${workspaceFolderBasename}/client.py"
+        },
+        {
+            "name": "Download and Run Current File",
+            "type": "ev3devBrowser",
+            "request": "launch",
+            "program": "/home/robot/${workspaceFolderBasename}/${relativeFile}"
+        }
+    ]
+}

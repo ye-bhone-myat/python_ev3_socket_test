@@ -5,6 +5,8 @@ import os
 import sys
 import socket
 import time
+import util
+import struct
 from ev3dev2.motor import MoveTank, SpeedPercent, OUTPUT_A, OUTPUT_B, OUTPUT_C, OUTPUT_D
 
 # state constants
@@ -12,7 +14,13 @@ ON = True
 OFF = False
 SERVER = None
 CLIENT = None
-PORT = 6969
+PORT = None
+MULTICAST_SOCK = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+MULTICAST_SOCK.bind(("", util.MULTICAST_PORT))
+GROUP = socket.inet_aton(util.MULTICAST_GROUP)
+mreq = struct.pack('4sL', GROUP, socket.INADDR_ANY)
+MULTICAST_SOCK.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
 
 def debug_print(*args, **kwargs):
     '''Print debug messages to stderr.
@@ -45,7 +53,7 @@ def set_font(name):
 def clientProgram(client: socket.socket):
     movetank = MoveTank(OUTPUT_B, OUTPUT_C)
     while True:
-        message = client.recv(1024).decode()
+        message = client.recv(1024).decode(util.FORMAT)
         if not message:
             break
         elif message != "!DISCONNECT":
@@ -64,9 +72,17 @@ def clientProgram(client: socket.socket):
                 
 
         else:
-            client.send(message.encode("utf-8"))
+            client.send(message.encode(util.FORMAT))
             client.close()
             break
+
+def find_server():
+    print("Listening for server broadcast on " + str(7070))
+    data, address = MULTICAST_SOCK.recvfrom(1024)
+    print("Received server information: " + str(address))
+    server, port = data.decode(util.FORMAT).split()
+    port = int(port)
+    return (server, port)
 
 def main():
     '''The main function of our program'''
@@ -86,9 +102,13 @@ def main():
     # SERVER = addr[0]
     # print("Closing connection, restarting as client")
     # conn.close()
-    SERVER="169.254.79.176"
+    # print("Listening for server broadcast on " + str(7070))
+    # data, address = MULTICAST_SOCK.recvfrom(1024)
+    # print("Received server information: " + str(address))
+    # SERVER, PORT = data.decode("utf-8").split()
+    # PORT = int(PORT)
     CLIENT = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    CLIENT.connect((SERVER, PORT))
+    CLIENT.connect(find_server())
     print("Connected")
     clientProgram(CLIENT)
     print("Disconnected. Exiting in 5 seconds.")

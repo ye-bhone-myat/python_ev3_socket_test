@@ -2,20 +2,26 @@ import socket
 import threading
 import sys
 import printlogger
+import util
+import struct
+import time
 import tkinter as tk
-
 HOST = socket.gethostbyname(socket.gethostname())
-PORT = 6969
-FORMAT = "utf-8"
+PORT = util.PORT
+FORMAT = util.FORMAT
 ADDR = (HOST, PORT)
-MAX_CONNECTIONS = 1
+MAX_CONNECTIONS = util.MAX_CONNECTIONS
 EVENT_SERVER_STOP = threading.Event()
 EVENT_SERVER_CONNECT = threading.Event()
 EVENT_CLIENT_DISCONNECT = threading.Event()
+EVENT_MULTICAST_STOP = threading.Event()
 # CONNECTED_CLIENTS = threading.BoundedSemaphore(MAX_CONNECTIONS)
 CLIENTS = []
 SERVER_SOCK = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 SERVER_SOCK.bind(ADDR)
+MULTICAST_SOCK = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+ttl = struct.pack('b', 1)
+MULTICAST_SOCK.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 TEXT_OUT = None
 TEXT_IN = None
 PL = None
@@ -123,19 +129,34 @@ def on_closing():
     """
 
     EVENT_SERVER_STOP.set()
+    EVENT_MULTICAST_STOP.set()
     for conn in CLIENTS:
         conn.close()
     SERVER_SOCK.close()
+    MULTICAST_SOCK.close()
     ROOT.destroy()
 
-
+def multicast_server_start():
+    print(f"[MULTICAST] Multicast server started.")
+    print(f"[MULTICAST] Multicasting on {util.MULTICAST_GROUP}, {util.MULTICAST_PORT}")
+    message = HOST + " " + str(PORT)
+    try:
+        # Send data to the multicast group
+        while not EVENT_MULTICAST_STOP.is_set():
+            if len(CLIENTS) < util.MAX_CONNECTIONS:          
+                sent = MULTICAST_SOCK.sendto(message.encode(util.FORMAT), 
+                                             (util.MULTICAST_GROUP, util.MULTICAST_PORT))
+            time.sleep(util.MULTICAST_INTERVAL)
+    finally:
+        print('[MULTICAST] Closing multicast socket.')
+        MULTICAST_SOCK.close()
 
 if __name__ == '__main__':
     ROOT = tk.Tk()
     TEXT_OUT_FRAME = tk.Frame(ROOT)
-    TEXT_OUT_FRAME.pack()
+    TEXT_OUT_FRAME.pack(fill="both")
     TEXT_OUT = tk.Text(TEXT_OUT_FRAME)
-    TEXT_OUT.pack(side="left")
+    TEXT_OUT.pack(side="left", fill="x")
     SB = tk.Scrollbar(TEXT_OUT_FRAME, orient="vertical", command=TEXT_OUT.yview)
     SB.pack(side="right", fill="y")
     TEXT_IN = tk.Entry()
@@ -143,8 +164,8 @@ if __name__ == '__main__':
     PL = printlogger.PrintLogger(TEXT_OUT)
     sys.stdout = PL
 
-
-
+    multicast_server = threading.Thread(target=multicast_server_start)
+    multicast_server.start()
     server = threading.Thread(target=server_start)
     server.start()
     ROOT.protocol("WM_DELETE_WINDOW", on_closing)
